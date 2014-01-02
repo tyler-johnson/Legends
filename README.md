@@ -75,12 +75,12 @@ Makes a request to the Roit API. `OPTIONS` is a dictionary with any of the field
 
 ##### Available Options
 
-`method`: Url method, appended to the base API url.
-`region`: A valid LoL region code: `na`, `euw`, `eune`, `br`, or `tr`.
-`version`: API version. Generally `1.1`, `1.2`, `2.1`, or `2.2`.
-`key`: API Key to be prepended to the url query.
-`params`: A dictionary of additional url query parameters.
-`extract`: The key to extract from the returned data.
+* `method`: Url method, appended to the base API url.
+* `region`: A valid LoL region code: `na`, `euw`, `eune`, `br`, or `tr`.
+* `version`: API version. Generally `1.1`, `1.2`, `2.1`, or `2.2`.
+* `key`: API Key to be prepended to the url query.
+* `params`: A dictionary of additional url query parameters.
+* `extract`: The key to extract from the returned data.
 
 #### Legends.MATCH_MAKING_QUEUES
 
@@ -88,7 +88,7 @@ A dictionary pairing queue ids to human readable names.
 
 #### Legends.MAP_NAMES
 
-A dictionary pairing maps ids to human readable names and notes.
+A dictionary pairing map ids to human readable names and notes.
 
 #### Legends.REGIONS
 
