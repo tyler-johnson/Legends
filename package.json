@@ -1,7 +1,7 @@
 {
 	"name": "legends",
 	"description": "A tiny League of Legends API library for Node.js and browsers.",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"author": "Tyler Johnson <tyler@tylerjohnson.me>",
 	"main": "./dist/legends.js",
 	"devDependencies": {
