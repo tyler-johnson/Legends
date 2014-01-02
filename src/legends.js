@@ -49,7 +49,7 @@ Legends.request = function(options, callback) {
 	if (extract != null) promise = promise.then(function(data) { return data[extract]; });
 
 	// load the callback
-	if (typeof callback == "function") promise.nodify(callback);
+	if (typeof callback == "function") nodifyPromise(promise, callback);
 
 	return promise;
 }
@@ -229,11 +229,11 @@ Legends.prototype.getNames = function() {
 		}));
 	}
 
-	var promise = D.all(promises).success(function(data) {
+	var promise = multiPromiseResolver(promises).then(function(data) {
 		return data.reduce(function(m, a) { return m.concat(a); }, []);
 	});
 
-	if (callback) promise.nodify(callback);
+	if (callback) nodifyPromise(promise, callback);
 
 	return promise;
 }

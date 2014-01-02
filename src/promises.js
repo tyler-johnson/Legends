@@ -1,416 +1,216 @@
 /**
-* D.js
-* Original by Jonathan Gotti <https://github.com/malko/D.js> 
+* avow
+* Copyright (c) 2012-2013 Brian Cavalier <https://github.com/briancavalier/avow> 
 * MIT License
 * Slightly modified for use in this library
 */
-var D = (function(undef){
-	"use strict";
 
-	var nextTick
-		, isFunc = function(f){ return ( typeof f === 'function' ); }
-		, isArray = function(a){ return Array.isArray ? Array.isArray(a) : (a instanceof Array); }
-		, isObjOrFunc = function(o){ return !!(o && (typeof o).match(/function|object/)); }
-		, isNotVal = function(v){ return (v === false || v === undef || v === null); }
-		, slice = function(a, offset){ return [].slice.call(a, offset); }
-		, undefStr = 'undefined'
-		, tErr = typeof TypeError === undefStr ? Error : TypeError
-	;
-	if ( (typeof process !== undefStr) && process.nextTick ) {
-		nextTick = process.nextTick;
-	} else if ( typeof MessageChannel !== undefStr ) {
-		var ntickChannel = new MessageChannel(), queue = [];
-		ntickChannel.port1.onmessage = function(){ queue.length && (queue.shift())(); };
-		nextTick = function(cb){
-			queue.push(cb);
-			ntickChannel.port2.postMessage(0);
-		};
-	} else {
-		nextTick = function(cb){ setTimeout(cb, 0); };
-	}
-	function rethrow(e){ nextTick(function(){ throw e;}); }
+var avow = (function() {
 
-	/**
-	 * @typedef deferred
-	 * @property {promise} promise
-	 * @method resolve
-	 * @method fulfill
-	 * @method reject
-	 */
+	var avow, enqueue, defaultConfig, setTimeout, bind, uncurryThis, call, undef;
 
-	/**
-	 * @typedef {function} fulfilled
-	 * @param {*} value promise resolved value
-	 * @returns {*} next promise resolution value
-	 */
+	bind = Function.prototype.bind;
+	uncurryThis = bind.bind(bind.call);
+	call = uncurryThis(bind.call);
 
-	/**
-	 * @typedef {function} failed
-	 * @param {*} reason promise rejection reason
-	 * @returns {*} next promise resolution value or rethrow the reason
-	 */
+	// Prefer setImmediate, cascade to node, vertx and finally setTimeout
+	/*global setImmediate,process,vertx*/
+	setTimeout = global.setTimeout;
+	enqueue = typeof setImmediate === 'function' ? setImmediate.bind(global)
+		: typeof process === 'object' && process.nextTick ? process.nextTick
+		: typeof vertx === 'object' ? vertx.runOnLoop // vert.x
+			: function(task) { setTimeout(task, 0); }; // fallback
 
-	//-- defining unenclosed promise methods --//
-	/**
-	 * same as then without failed callback
-	 * @param {fulfilled} fulfilled callback
-	 * @returns {promise} a new promise
-	 */
-	function promise_success(fulfilled){ return this.then(fulfilled, undef); }
+	// Default configuration
+	defaultConfig = {
+		enqueue:   enqueue,
+		unhandled: noop,
+		handled:   noop,
+		protect:   noop
+	};
 
-	/**
-	 * same as then with only a failed callback
-	 * @param {failed} failed callback
-	 * @returns {promise} a new promise
-	 */
-	function promise_error(failed){ return this.then(undef, failed); }
+	// Create the default module instance
+	// This is what you get when you require('avow')
+	avow = constructAvow(defaultConfig);
 
+	// You can use require('avow').construct(options) to
+	// construct a custom configured version of avow
+	avow.construct = constructAvow;
 
-	/**
-	 * same as then but fulfilled callback will receive multiple parameters when promise is fulfilled with an Array
-	 * @param {fulfilled} fulfilled callback
-	 * @param {failed} failed callback
-	 * @returns {promise} a new promise
-	 */
-	function promise_apply(fulfilled, failed){
-		return this.then(
-			function(a){
-				return isFunc(fulfilled) ? fulfilled.apply(null, isArray(a) ? a : [a]) : (defer.onlyFuncs ? a : fulfilled);
-			}
-			, failed || undef
-		);
-	}
+	return avow;
 
-	/**
-	 * cleanup method which will be always executed regardless fulfillment or rejection
-	 * @param {function} cb a callback called regardless of the fulfillment or rejection of the promise which will be called
-	 *                      when the promise is not pending anymore
-	 * @returns {promise} the same promise untouched
-	 */
-	function promise_ensure(cb){
-		function _cb(){ cb(); }
-		this.then(_cb, _cb);
-		return this;
-	}
+	// This constructs configured instances of the avow module
+	function constructAvow(config) {
 
-	/**
-	 * take a single callback which wait for an error as first parameter. other resolution values are passed as with the apply/spread method
-	 * @param {function} cb a callback called regardless of the fulfillment or rejection of the promise which will be called
-	 *                      when the promise is not pending anymore with error as first parameter if any as in node style
-	 *                      callback. Rest of parameters will be applied as with the apply method.
-	 * @returns {promise} a new promise
-	 */
-	function promise_nodify(cb){
-		return this.then(
-			function(a){
-				return isFunc(cb) ? cb.apply(null, [undefined, a]) : (defer.onlyFuncs ? a : cb);
-			}
-			, function(e){
-				return cb(e);
-			}
-		);
-	}
+		var enqueue, onHandled, onUnhandled, protect;
 
-	/**
-	 *
-	 * @param {function} [failed] without parameter will only rethrow promise rejection reason outside of the promise library on next tick
-	 *                            if passed a failed method then will call failed on rejection and throw the error again if failed didn't
-	 * @returns {promise} a new promise
-	 */
-	function promise_rethrow(failed){
-		return this.then(
-			undef
-			, failed ? function(e){ failed(e); throw e; } : rethrow
-		);
-	}
+		// Grab the config params, use defaults where necessary
+		enqueue     = config.enqueue   || defaultConfig.enqueue;
+		onHandled   = config.handled   || defaultConfig.handled;
+		onUnhandled = config.unhandled || defaultConfig.unhandled;
+		protect     = config.protect   || defaultConfig.protect;
 
-	/**
-	* @param {boolean} [alwaysAsync] if set force the async resolution for this promise independantly of the D.alwaysAsync option
-	* @returns {deferred} defered object with property 'promise' and methods reject,fulfill,resolve (fulfill being an alias for resolve)
-	*/
-	var defer = function (alwaysAsync){
-		var alwaysAsyncFn = (undef !== alwaysAsync ? alwaysAsync : defer.alwaysAsync) ? nextTick : function(fn){fn();}
-			, status = 0 // -1 failed | 1 fulfilled
-			, pendings = []
-			, value
-			/**
-			 * @typedef promise
-			 */
-			, _promise  = {
-				/**
-				 * @param {fulfilled|function} fulfilled callback
-				 * @param {failed|function} failed callback
-				 * @returns {promise} a new promise
-				 */
-				then: function(fulfilled, failed){
-					var d = defer();
-					pendings.push([
-						function(value){
-							try{
-								if( isNotVal(fulfilled)){
-									d.resolve(value);
-								} else {
-									d.resolve(isFunc(fulfilled) ? fulfilled(value) : (defer.onlyFuncs ? value : fulfilled));
-								}
-							}catch(e){
-								d.reject(e);
-							}
-						}
-						, function(err){
-							if ( isNotVal(failed) || ((!isFunc(failed)) && defer.onlyFuncs) ) {
-								d.reject(err);
-							}
-							if ( failed ) {
-								try{ d.resolve(isFunc(failed) ? failed(err) : failed); }catch(e){ d.reject(e);}
-							}
-						}
-					]);
-					status !== 0 && alwaysAsyncFn(execCallbacks);
-					return d.promise;
-				}
+		// Add lift and reject methods.
+		promise.lift    = lift;
+		promise.reject  = reject;
 
-				, success: promise_success
+		return promise;
 
-				, error: promise_error
-				, otherwise: promise_error
-
-				, apply: promise_apply
-				, spread: promise_apply
-
-				, ensure: promise_ensure
-
-				, nodify: promise_nodify
-
-				, rethrow: promise_rethrow
-
-				, isPending: function(){ return !!(status === 0); }
-
-				, getStatus: function(){ return status; }
-			}
-		;
-		_promise.toSource = _promise.toString = _promise.valueOf = function(){return value === undef ? this : value; };
-
-
-		function execCallbacks(){
-			if ( status === 0 ) {
-				return;
-			}
-			var cbs = pendings, i = 0, l = cbs.length, cbIndex = ~status ? 0 : 1, cb;
-			pendings = [];
-			for( ; i < l; i++ ){
-				(cb = cbs[i][cbIndex]) && cb(value);
-			}
+		// Return a trusted promise for x.  Where if x is a
+		// - Promise, return it
+		// - value, return a promise that will eventually fulfill with x
+		// - thenable, assimilate it and return a promise whose fate follows that of x.
+		function lift(x) {
+			return promise(function(resolve) {
+				resolve(x);
+			});
 		}
 
-		/**
-		 * fulfill deferred with given value
-		 * @param {*} val
-		 * @returns {deferred} this for method chaining
-		 */
-		function _resolve(val){
-			var done = false;
-			function once(f){
-				return function(x){
-					if (done) {
-						return undefined;
-					} else {
-						done = true;
-						return f(x);
-					}
-				};
-			}
-			if ( status ) {
-				return this;
-			}
+		// Return a rejected promise
+		function reject(reason) {
+			return promise(function(_, reject) {
+				reject(reason);
+			});
+		}
+
+		// Return a pending promise whose fate is determined by resolver
+		function promise(resolver) {
+			var self, value, handled, handlers = [];
+
+			self = new Promise(then);
+
+			// Call the resolver to seal the promise's fate
 			try {
-				var then = isObjOrFunc(val) && val.then;
-				if ( isFunc(then) ) { // managing a promise
-					if( val === _promise ){
-						throw new tErr("Promise can't resolve itself");
-					}
-					then.call(val, once(_resolve), once(_reject));
-					return this;
+				resolver(promiseResolve, promiseReject);
+			} catch(e) {
+				promiseReject(e);
+			}
+
+			// Return the promise
+			return self;
+
+			// Register handlers with this promise
+			function then(onFulfilled, onRejected) {
+				if (!handled) {
+					handled = true;
+					onHandled(self);
 				}
-			} catch (e) {
-				once(_reject)(e);
-				return this;
+
+				return promise(function(resolve, reject) {
+					handlers
+						// Call handlers later, after resolution
+						? handlers.push(function(value) {
+							value.then(onFulfilled, onRejected).then(resolve, reject);
+						})
+						// Call handlers soon, but not in the current stack
+						: enqueue(function() {
+							value.then(onFulfilled, onRejected).then(resolve, reject);
+						});
+				});
 			}
-			alwaysAsyncFn(function(){
-				value = val;
-				status = 1;
-				execCallbacks();
-			});
-			return this;
-		}
 
-		/**
-		 * reject deferred with given reason
-		 * @param {*} Err
-		 * @returns {deferred} this for method chaining
-		 */
-		function _reject(Err){
-			status || alwaysAsyncFn(function(){
-				try{ throw(Err); }catch(e){ value = e; }
-				status = -1;
-				execCallbacks();
-			});
-			return this;
-		}
-		return /**@type deferred */ {
-			promise:_promise
-			,resolve:_resolve
-			,fulfill:_resolve // alias
-			,reject:_reject
-		};
-	};
+			// Resolve with a value, promise, or thenable
+			function promiseResolve(value) {
+				if(!handlers) {
+					return;
+				}
 
-	defer.deferred = defer.defer = defer;
-	defer.nextTick = nextTick;
-	defer.alwaysAsync = true; // setting this will change default behaviour. use it only if necessary as asynchronicity will force some delay between your promise resolutions and is not always what you want.
-	/**
-	* setting onlyFuncs to false will break promises/A+ conformity by allowing you to pass non undefined/null values instead of callbacks
-	* instead of just ignoring any non function parameters to then,success,error... it will accept non null|undefined values.
-	* this will allow you shortcuts like promise.then('val','handled error'')
-	* to be equivalent of promise.then(function(){ return 'val';},function(){ return 'handled error'})
-	*/
-	defer.onlyFuncs = true;
-
-	/**
-	 * return a fulfilled promise of given value (always async resolution)
-	 * @param {*} value
-	 * @returns {promise}
-	 */
-	defer.resolved = defer.fulfilled = function(value){ return defer(true).resolve(value).promise; };
-
-	/**
-	 * return a rejected promise with given reason of rejection (always async rejection)
-	 * @param {*} reason
-	 * @returns {promise}
-	 */
-	defer.rejected = function(reason){ return defer(true).reject(reason).promise; };
-
-	/**
-	 * return a promise with no resolution value which will be resolved in time ms (using setTimeout)
-	 * @param {int} [time] in ms default to 0
-	 * @returns {promise}
-	 */
-	defer.wait = function(time){
-		var d = defer();
-		setTimeout(d.resolve, time || 0);
-		return d.promise;
-	};
-
-	/**
-	 * return a promise for the return value of function call which will be fulfilled in delay ms or rejected if given fn throw an error
-	 * @param {function} fn
-	 * @param {int} [delay] in ms default to 0
-	 * @returns {promise}
-	 */
-	defer.delay = function(fn, delay){
-		var d = defer();
-		setTimeout(function(){ try{ d.resolve(fn.apply(null)); }catch(e){ d.reject(e); } }, delay || 0);
-		return d.promise;
-	};
-
-	/**
-	 * if given value is not a promise return a fulfilled promise resolved to given value
-	 * @param {*} promise a value or a promise
-	 * @returns {promise}
-	 */
-	defer.promisify = function(promise){
-		if ( promise && isFunc(promise.then) ) { return promise;}
-		return defer.resolved(promise);
-	};
-
-	function multiPromiseResolver(callerArguments, returnPromises){
-		var promises = slice(callerArguments);
-		if ( promises.length === 1 && isArray(promises[0]) ) {
-			if(! promises[0].length ){
-				return defer.fulfilled([]);
+				resolve(coerce(value));
 			}
-			promises = promises[0];
+
+			// Reject with reason verbatim
+			function promiseReject(reason) {
+				if(!handlers) {
+					return;
+				}
+
+				if(!handled) {
+					onUnhandled(self, reason);
+				}
+
+				resolve(rejected(reason));
+			}
+
+			// For all handlers, run the Promise Resolution Procedure on this promise
+			function resolve(x) {
+				var queue = handlers;
+				handlers = undef;
+				value = x;
+
+				enqueue(function () {
+					queue.forEach(function (handler) {
+						handler(value);
+					});
+				});
+			}
 		}
-		var args = []
-			, d = defer()
-			, c = promises.length
-		;
-		if ( !c ) {
-			d.resolve(args);
-		} else {
-			var resolver = function(i){
-				promises[i] = defer.promisify(promises[i]);
-				promises[i].then(
-					function(v){
-						if (! (i in args) ) { //@todo check this is still required as promises can't be resolve more than once
-							args[i] = returnPromises ? promises[i] : v;
-							(--c) || d.resolve(args);
+
+		// Private
+
+		// Trusted promise constructor
+		function Promise(then) {
+			this.then = then;
+			protect(this);
+		}
+
+		// Coerce x to a promise
+		function coerce(x) {
+			if(x instanceof Promise) {
+				return x;
+			} else if (x !== Object(x)) {
+				return fulfilled(x);
+			}
+
+			return promise(function(resolve, reject) {
+				enqueue(function() {
+					try {
+						// We must check and assimilate in the same tick, but not the
+						// current tick, careful only to access promiseOrValue.then once.
+						var untrustedThen = x.then;
+
+						if(typeof untrustedThen === 'function') {
+							call(untrustedThen, x, resolve, reject);
+						} else {
+							// It's a value, create a fulfilled wrapper
+							resolve(fulfilled(x));
 						}
+					} catch(e) {
+						// Something went wrong, reject
+						reject(e);
 					}
-					, function(e){
-						if(! (i in args) ){
-							if( ! returnPromises ){
-								d.reject(e);
-							} else {
-								args[i] = promises[i];
-								(--c) || d.resolve(args);
-							}
-						}
-					}
-				);
-			};
-			for( var i = 0, l = c; i < l; i++ ){
-				resolver(i);
-			}
+				});
+			});
 		}
-		return d.promise;
+
+		// create an already-fulfilled promise used to break assimilation recursion
+		function fulfilled(x) {
+			var self = new Promise(function (onFulfilled) {
+				try {
+					return typeof onFulfilled == 'function'
+						? coerce(onFulfilled(x)) : self;
+				} catch (e) {
+					return rejected(e);
+				}
+			});
+
+			return self;
+		}
+
+		// create an already-rejected promise
+		function rejected(x) {
+			var self = new Promise(function (_, onRejected) {
+				try {
+					return typeof onRejected == 'function'
+						? coerce(onRejected(x)) : self;
+				} catch (e) {
+					return rejected(e);
+				}
+			});
+
+			return self;
+		}
 	}
 
-	/**
-	 * return a promise for all given promises / values.
-	 * the returned promises will be fulfilled with a list of resolved value.
-	 * if any given promise is rejected then on the first rejection the returned promised will be rejected with the same reason
-	 * @param {array|...*} [promise] can be a single array of promise/values as first parameter or a list of direct parameters promise/value
-	 * @returns {promise} of a list of given promise resolution value
-	 */
-	defer.all = function(){ return multiPromiseResolver(arguments,false); };
-
-	/**
-	 * return an always fulfilled promise of array<promise> list of promises/values regardless they resolve fulfilled or rejected
-	 * @param {array|...*} [promise] can be a single array of promise/values as first parameter or a list of direct parameters promise/value
-	 *                     (non promise values will be promisified)
-	 * @returns {promise} of the list of given promises
-	 */
-	defer.resolveAll = function(){ return multiPromiseResolver(arguments,true); };
-
-	/**
-	 * transform a typical nodejs async method awaiting a callback as last parameter, receiving error as first parameter to a function that
-	 * will return a promise instead. the returned promise will resolve with normal callback value minus the first error parameter on
-	 * fulfill and will be rejected with that error as reason in case of error.
-	 * @param {object} [subject] optional subject of the method to encapsulate
-	 * @param {function} fn the function to encapsulate if the normal callback should receive more than a single parameter (minus the error)
-	 *                      the promise will resolve with the list or parameters as fulfillment value. If only one parameter is sent to the
-	 *                      callback then it will be used as the resolution value.
-	 * @returns {Function}
-	 */
-	defer.nodeCapsule = function(subject, fn){
-		if ( !fn ) {
-			fn = subject;
-			subject = void(0);
-		}
-		return function(){
-			var d = defer(), args = slice(arguments);
-			args.push(function(err, res){
-				err ? d.reject(err) : d.resolve(arguments.length > 2 ? slice(arguments, 1) : res);
-			});
-			try{
-				fn.apply(subject, args);
-			}catch(e){
-				d.reject(e);
-			}
-			return d.promise;
-		};
-	};
-
-	return defer;
+	function noop() {}
 
 })();

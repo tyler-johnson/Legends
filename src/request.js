@@ -59,54 +59,52 @@ function HTTPError(err, res) {
 }
 
 function nodeRequest(url) {
-	var http = require("http"),
-		deferred = D();
+	var http = require("http");
 
-	http.get(url, function(res) {
-		function onError(err) {
-			deferred.reject(HTTPError(err, res));
-		}
+	return avow(function(resolve, reject) {
+		http.get(url, function(res) {
+			function onError(err) {
+				reject(HTTPError(err, res));
+			}
 
-		res.on("error", onError);
-		if (res.statusCode >= 400) return onError();
-		
-		var raw = "";
-		res.on("data", function(chunk) {
-			raw += chunk.toString("utf-8");
+			res.on("error", onError);
+			if (res.statusCode >= 400) return onError();
+			
+			var raw = "";
+			res.on("data", function(chunk) {
+				raw += chunk.toString("utf-8");
+			});
+
+			res.on("end", function() {
+				var data;
+
+				try { resolve(JSON.parse(raw)); }
+				catch (err) { onError(err); }
+			});
+		}).on('error', function(err) {
+			reject(HTTPError(err));
 		});
-
-		res.on("end", function() {
-			var data;
-
-			try { deferred.resolve(JSON.parse(raw)); }
-			catch (err) { onError(err); }
-		});
-	}).on('error', function(err) {
-		deferred.reject(HTTPError(err));
 	});
-
-	return deferred.promise;
 }
 
 function XHRRequest(url) {
-	var req = new XMLHttpRequest(),
-		deferred = D();
-
-	function onError(err) {
-		deferred.reject(HTTPError(err, req));
-	}
+	var req = new XMLHttpRequest();
 	
-	req.onload = function() {
-		if (req.status >= 400) return onError();
+	return avow(function(resolve, reject) {
+		function onError(err) {
+			reject(HTTPError(err, req));
+		}
+		
+		req.onload = function() {
+			if (req.status >= 400) return onError();
 
-		try { deferred.resolve(JSON.parse(req.responseText)); }
-		catch (err) { onError(err); }
-	}
-	
-	req.open("get", url);
-	req.send();
-
-	return deferred.promise;
+			try { resolve(JSON.parse(req.responseText)); }
+			catch (err) { onError(err); }
+		}
+		
+		req.open("get", url);
+		req.send();
+	});
 }
 
 function HTTPRequest(url) {

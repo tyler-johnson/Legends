@@ -8,3 +8,35 @@ function flattenArgs(args, out) {
 
 	return out;
 }
+
+function nodifyPromise(promise, callback) {
+	return promise.then(
+		function(a) {
+			return callback(null, a);
+		},
+		function(e) {
+			return callback(e);
+		}
+	);
+}
+
+function multiPromiseResolver(promises) {
+	var args = [], c = promises.length;
+
+	return avow(function(resolve, reject) {
+		if (!c) return resolve(args);
+
+		promises.forEach(function(promise, i) {
+			promise = avow.lift(promise);
+			promise.then(
+				function(v) {
+					if (!(i in args)) {
+						args[i] = v;
+						(--c) || resolve(args);
+					}
+				},
+				reject
+			);
+		});
+	});
+}
