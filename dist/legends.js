@@ -376,8 +376,7 @@ function XHRRequest(url) {
 }
 
 function HTTPRequest(url) {
-	if (typeof require == "function") return nodeRequest(url);
-	else return XHRRequest(url);
+	return typeof require == "function" ? nodeRequest(url) : XHRRequest(url);
 }
 
 /**
