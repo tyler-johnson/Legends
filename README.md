@@ -143,3 +143,5 @@ Retrieves summoners' names by list of ids. Ids can be passed as seperate argumen
 #### legends.getTeams( SUMMONER_ID, *[ CALLBACK ]* )
 
 Retrieves a summoner's teams. <https://developer.riotgames.com/api/methods#!/310/1058>
+
+*This product is not endorsed, certified or otherwise approved in any way by Riot Games, Inc. or any of its affiliates.*
