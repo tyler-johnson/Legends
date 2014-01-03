@@ -61,7 +61,7 @@ function HTTPError(err, res) {
 function nodeRequest(url) {
 	var http = require("http");
 
-	return avow(function(resolve, reject) {
+	return new Promise(function(resolve, reject) {
 		http.get(url, function(res) {
 			function onError(err) {
 				reject(HTTPError(err, res));
@@ -90,7 +90,7 @@ function nodeRequest(url) {
 function XHRRequest(url) {
 	var req = new XMLHttpRequest();
 	
-	return avow(function(resolve, reject) {
+	return new Promise(function(resolve, reject) {
 		function onError(err) {
 			reject(HTTPError(err, req));
 		}

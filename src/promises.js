@@ -1,216 +1,114 @@
 /**
-* avow
-* Copyright (c) 2012-2013 Brian Cavalier <https://github.com/briancavalier/avow> 
+* promiscuous
+* Copyright (c) 2013 Ruben Verborgh <https://github.com/RubenVerborgh/promiscuous> 
 * MIT License
 * Slightly modified for use in this library
 */
 
-var avow = (function() {
+var Promise = (function (func, obj) {
+	// Type checking utility function
+	function is(type, item) { return (typeof item)[0] == type; }
 
-	var avow, enqueue, defaultConfig, setTimeout, bind, uncurryThis, call, undef;
+	// Creates a promise, calling callback(resolve, reject), ignoring other parameters.
+	function Promise(callback, handler) {
+		// The `handler` variable points to the function that will
+		// 1) handle a .then(resolved, rejected) call
+		// 2) handle a resolve or reject call (if the first argument === `is`)
+		// Before 2), `handler` holds a queue of callbacks.
+		// After 2), `handler` is a finalized .then handler.
+		handler = function pendingHandler(resolved, rejected, value, queue, then) {
+			queue = pendingHandler.q;
 
-	bind = Function.prototype.bind;
-	uncurryThis = bind.bind(bind.call);
-	call = uncurryThis(bind.call);
-
-	// Prefer setImmediate, cascade to node, vertx and finally setTimeout
-	/*global setImmediate,process,vertx*/
-	setTimeout = global.setTimeout;
-	enqueue = typeof setImmediate === 'function' ? setImmediate.bind(global)
-		: typeof process === 'object' && process.nextTick ? process.nextTick
-		: typeof vertx === 'object' ? vertx.runOnLoop // vert.x
-			: function(task) { setTimeout(task, 0); }; // fallback
-
-	// Default configuration
-	defaultConfig = {
-		enqueue:   enqueue,
-		unhandled: noop,
-		handled:   noop,
-		protect:   noop
-	};
-
-	// Create the default module instance
-	// This is what you get when you require('avow')
-	avow = constructAvow(defaultConfig);
-
-	// You can use require('avow').construct(options) to
-	// construct a custom configured version of avow
-	avow.construct = constructAvow;
-
-	return avow;
-
-	// This constructs configured instances of the avow module
-	function constructAvow(config) {
-
-		var enqueue, onHandled, onUnhandled, protect;
-
-		// Grab the config params, use defaults where necessary
-		enqueue     = config.enqueue   || defaultConfig.enqueue;
-		onHandled   = config.handled   || defaultConfig.handled;
-		onUnhandled = config.unhandled || defaultConfig.unhandled;
-		protect     = config.protect   || defaultConfig.protect;
-
-		// Add lift and reject methods.
-		promise.lift    = lift;
-		promise.reject  = reject;
-
-		return promise;
-
-		// Return a trusted promise for x.  Where if x is a
-		// - Promise, return it
-		// - value, return a promise that will eventually fulfill with x
-		// - thenable, assimilate it and return a promise whose fate follows that of x.
-		function lift(x) {
-			return promise(function(resolve) {
-				resolve(x);
-			});
-		}
-
-		// Return a rejected promise
-		function reject(reason) {
-			return promise(function(_, reject) {
-				reject(reason);
-			});
-		}
-
-		// Return a pending promise whose fate is determined by resolver
-		function promise(resolver) {
-			var self, value, handled, handlers = [];
-
-			self = new Promise(then);
-
-			// Call the resolver to seal the promise's fate
-			try {
-				resolver(promiseResolve, promiseReject);
-			} catch(e) {
-				promiseReject(e);
-			}
-
-			// Return the promise
-			return self;
-
-			// Register handlers with this promise
-			function then(onFulfilled, onRejected) {
-				if (!handled) {
-					handled = true;
-					onHandled(self);
-				}
-
-				return promise(function(resolve, reject) {
-					handlers
-						// Call handlers later, after resolution
-						? handlers.push(function(value) {
-							value.then(onFulfilled, onRejected).then(resolve, reject);
-						})
-						// Call handlers soon, but not in the current stack
-						: enqueue(function() {
-							value.then(onFulfilled, onRejected).then(resolve, reject);
-						});
+			// Case 1) handle a .then(resolved, rejected) call
+			if (resolved != is) {
+				return Promise(function (resolve, reject) {
+					queue.push({ p: this, r: resolve, j: reject, 1: resolved, 0: rejected });
 				});
 			}
 
-			// Resolve with a value, promise, or thenable
-			function promiseResolve(value) {
-				if(!handlers) {
-					return;
-				}
+			// Case 2) handle a resolve or reject call
+			// (`resolved` === `is` acts as a sentinel)
+			// The actual function signature is
+			// .re[ject|solve](<is>, success, value)
 
-				resolve(coerce(value));
+			// Check if the value is a promise and try to obtain its `then` method
+			if (value && (is(func, value) | is(obj, value))) {
+				try { then = value.then; }
+				catch (reason) { rejected = 0; value = reason; }
 			}
-
-			// Reject with reason verbatim
-			function promiseReject(reason) {
-				if(!handlers) {
-					return;
+			// If the value is a promise, take over its state
+			if (is(func, then)) {
+				function valueHandler(resolved) {
+					return function (value) { then && (then = 0, pendingHandler(is, resolved, value)); };
 				}
-
-				if(!handled) {
-					onUnhandled(self, reason);
-				}
-
-				resolve(rejected(reason));
+				try { then.call(value, valueHandler(1), rejected = valueHandler(0)); }
+				catch (reason) { rejected(reason); }
 			}
-
-			// For all handlers, run the Promise Resolution Procedure on this promise
-			function resolve(x) {
-				var queue = handlers;
-				handlers = undef;
-				value = x;
-
-				enqueue(function () {
-					queue.forEach(function (handler) {
-						handler(value);
-					});
-				});
-			}
-		}
-
-		// Private
-
-		// Trusted promise constructor
-		function Promise(then) {
-			this.then = then;
-			protect(this);
-		}
-
-		// Coerce x to a promise
-		function coerce(x) {
-			if(x instanceof Promise) {
-				return x;
-			} else if (x !== Object(x)) {
-				return fulfilled(x);
-			}
-
-			return promise(function(resolve, reject) {
-				enqueue(function() {
-					try {
-						// We must check and assimilate in the same tick, but not the
-						// current tick, careful only to access promiseOrValue.then once.
-						var untrustedThen = x.then;
-
-						if(typeof untrustedThen === 'function') {
-							call(untrustedThen, x, resolve, reject);
-						} else {
-							// It's a value, create a fulfilled wrapper
-							resolve(fulfilled(x));
-						}
-					} catch(e) {
-						// Something went wrong, reject
-						reject(e);
-					}
-				});
-			});
-		}
-
-		// create an already-fulfilled promise used to break assimilation recursion
-		function fulfilled(x) {
-			var self = new Promise(function (onFulfilled) {
-				try {
-					return typeof onFulfilled == 'function'
-						? coerce(onFulfilled(x)) : self;
-				} catch (e) {
-					return rejected(e);
+			// The value is not a promise; handle resolve/reject
+			else {
+				// Replace this handler with a finalized resolved/rejected handler
+				handler = createFinalizedThen(callback, value, rejected);
+				// Resolve/reject pending callbacks
+				callback = 0;
+				while (callback < queue.length) {
+					then = queue[callback++];
+					// If no callback, just resolve/reject the promise
+					if (!is(func, resolved = then[rejected]))
+						(rejected ? then.r : then.j)(value);
+					// Otherwise, resolve/reject the promise with the result of the callback
+					else
+						finalize(then.p, then.r, then.j, value, resolved);
 				}
-			});
+			}
+		};
+		// The queue of pending callbacks; garbage-collected when handler is resolved/rejected
+		handler.q = [];
 
-			return self;
-		}
-
-		// create an already-rejected promise
-		function rejected(x) {
-			var self = new Promise(function (_, onRejected) {
-				try {
-					return typeof onRejected == 'function'
-						? coerce(onRejected(x)) : self;
-				} catch (e) {
-					return rejected(e);
-				}
-			});
-
-			return self;
-		}
+		// Create and return the promise (reusing the callback variable)
+		callback.call(callback = { then: function (resolved, rejected) { return handler(resolved, rejected); } },
+									function (value)  { handler(is, 1,  value); },
+									function (reason) { handler(is, 0, reason); });
+		return callback;
 	}
 
-	function noop() {}
+	// Creates a resolved or rejected .then function
+	function createFinalizedThen(promise, value, success) {
+		return function (resolved, rejected) {
+			// If the resolved or rejected parameter is not a function, return the original promise
+			if (!is(func, (resolved = success ? resolved : rejected)))
+				return promise;
+			// Otherwise, return a finalized promise, transforming the value with the function
+			return Promise(function (resolve, reject) { finalize(this, resolve, reject, value, resolved); });
+		};
+	}
 
-})();
+	// Finalizes the promise by resolving/rejecting it with the transformed value
+	function finalize(promise, resolve, reject, value, transform) {
+		setTimeout(function () {
+			try {
+				// Transform the value through and check whether it's a promise
+				value = transform(value);
+				transform = value && (is(obj, value) | is(func, value)) && value.then;
+				// Return the result if it's not a promise
+				if (!is(func, transform))
+					resolve(value);
+				// If it's a promise, make sure it's not circular
+				else if (value == promise)
+					reject(new TypeError());
+				// Take over the promise's state
+				else
+					transform.call(value, resolve, reject);
+			}
+			catch (error) { reject(error); }
+		}, 0);
+	}
+
+	Promise.resolve = function (value, promise) {
+		return (promise = {}).then = createFinalizedThen(promise, value,  1), promise;
+	};
+	Promise.reject = function (reason, promise) {
+		return (promise = {}).then = createFinalizedThen(promise, reason, 0), promise;
+	};
+
+	return Promise;
+})('f', 'o');

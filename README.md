@@ -1,4 +1,4 @@
-Legends is a very tiny (~7KB minified) League of Legends API Library for Node.js and browsers. It based on promises, making it very fast and robust. The full Riot API is available and it also includes human readable names for maps and queues.
+Legends is a very tiny (~6KB minified) League of Legends API Library for Node.js and browsers. It based on promises, making it very fast and robust. The full Riot API is available and it also includes human readable names for maps and queues.
 
 ## Installation and Usage
 
@@ -26,7 +26,7 @@ And use:
 var legends = Legends("MY_SECRET_API_KEY", "na");
 ```
 
-**NOTE**: While this library is fully functional in browsers, it is not reccomended to reveal your "secret" API key to end users. Check out <https://developer.riotgames.com/best-practices> for best practices with the API.
+**NOTE**: Using this library in the browser will require you to reveal your API key to end users. This is not reccomended for obvious reasons. Check out <https://developer.riotgames.com/best-practices> for best practices with the API.
 
 ## Example
 

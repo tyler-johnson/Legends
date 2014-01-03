@@ -23,7 +23,7 @@ function nodifyPromise(promise, callback) {
 function multiPromiseResolver(promises) {
 	var args = [], c = promises.length;
 
-	return avow(function(resolve, reject) {
+	return new Promise(function(resolve, reject) {
 		if (!c) return resolve(args);
 
 		promises.forEach(function(promise, i) {
