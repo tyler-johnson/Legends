@@ -1,7 +1,7 @@
 /*!
  * Legends.js
+ * Copyright (c) 2014 Tyler Johnson
  * MIT License
- * https://github.com/appleifreak/Legends.git 
  */
 
 (function() {

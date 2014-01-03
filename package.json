@@ -5,9 +5,12 @@
 	"author": "Tyler Johnson <tyler@tylerjohnson.me>",
 	"main": "./dist/legends.js",
 	"devDependencies": {
-		"grunt": "~0.4.2",
-		"grunt-contrib-concat": "~0.3.0",
-		"grunt-contrib-uglify": "~0.2.7"
+		"gulp": "~3.2.2",
+		"gulp-concat": "~2.1.6",
+		"gulp-uglify": "~0.1.0",
+		"gulp-rename": "~0.2.1",
+		"gulp-header": "~0.4.0",
+		"gulp-footer": "~0.4.0"
 	},
 	"repository": {
 		"type": "git",
