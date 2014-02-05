@@ -17,7 +17,7 @@ var LegendsProto = Legends.prototype;
  */
 
 Legends.request = function(options, callback) {
-	if (typeof options != "object") options = {};
+	if (typeof options !== "object") options = {};
 
 	var method = options.method != null ? options.method : "",
 		region = options.region != null ? options.region : "na",
@@ -52,7 +52,7 @@ Legends.request = function(options, callback) {
 	if (extract != null) promise = promise.then(function(data) { return data[extract]; });
 
 	// load the callback
-	if (typeof callback == "function") nodifyPromise(promise, callback);
+	if (typeof callback === "function") nodifyPromise(promise, callback);
 
 	return promise;
 }
@@ -112,7 +112,7 @@ Legends.CHALLENGER_TYPES = [
 
 LegendsProto.champions =
 LegendsProto.getChampions = function(freeToPlay, callback) {
-	if (typeof freeToPlay == "function" && callback == null) {
+	if (typeof freeToPlay === "function" && callback == null) {
 		callback = freeToPlay;
 		freeToPlay = false;
 	}
@@ -180,7 +180,7 @@ LegendsProto.getLeagues = function(summonerId, callback) {
 
 LegendsProto.summaryStats =
 LegendsProto.getSummaryStats = function(summonerId, season, callback) {
-	if (typeof season == "function" && callback == null) {
+	if (typeof season === "function" && callback == null) {
 		callback = season;
 		season = null;
 	}
@@ -197,7 +197,7 @@ LegendsProto.getSummaryStats = function(summonerId, season, callback) {
 
 LegendsProto.rankedStats =
 LegendsProto.getRankedStats = function(summonerId, season, callback) {
-	if (typeof season == "function" && callback == null) {
+	if (typeof season === "function" && callback == null) {
 		callback = season;
 		season = null;
 	}
@@ -303,7 +303,7 @@ LegendsProto.getTeams = function(summonerId, callback) {
  * Public API Factory
  */
 
-if (typeof module == "object" && module.exports != null) {
+if (typeof module === "object" && module.exports != null) {
 	module.exports = Legends;
 } else if (typeof window != "undefined") {
 	window.Legends = Legends;

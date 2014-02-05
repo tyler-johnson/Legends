@@ -12,7 +12,7 @@ function stringifyQuery(obj, sep, eq) {
 	if (sep == null) sep = '&';
 	if (eq == null) eq = '=';
 
-	if (typeof obj == "object") {
+	if (typeof obj === "object") {
 		return Object.keys(obj).map(function(k) {
 			var ks = encodeURIComponent(stringifyPrimitive(k)) + eq,
 				val = obj[k];
@@ -112,5 +112,5 @@ function XHRRequest(url) {
 }
 
 function HTTPRequest(url) {
-	return typeof require == "function" ? nodeRequest(url) : XHRRequest(url);
+	return typeof require === "function" ? nodeRequest(url) : XHRRequest(url);
 }
