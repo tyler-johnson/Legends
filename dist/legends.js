@@ -207,9 +207,12 @@ function concatMany(args, max_per_request, forEach) {
 }
 
 function stringifyPrimitive(v) {
-	if (typeof v == "string") return v;
-	if (typeof v == "boolean") return v ? 'true' : 'false';
-	return '';
+	switch (typeof v) {
+		case "string": return v;
+		case "boolean": return v ? 'true' : 'false';
+		case "number": return v.toString(10);
+		default: return '';
+	}
 }
 
 function stringifyQuery(obj, sep, eq) {
@@ -239,7 +242,8 @@ var responseCodes = {
 	400: "Bad request",
 	401: "Unauthorized",
 	404: "Not found",
-	500: "Internal server error"
+	500: "Internal server error",
+	503: "Service Unavailable"
 };
 
 function HTTPError(err, res) {
@@ -330,6 +334,9 @@ function Legends(key, region) {
 	this.region = region;
 }
 
+// Pointer for a smaller minified source
+var LegendsProto = Legends.prototype; 
+
 /**
  * API Request
  */
@@ -375,7 +382,7 @@ Legends.request = function(options, callback) {
 	return promise;
 }
 
-Legends.prototype.request = function(options, callback) {
+LegendsProto.request = function(options, callback) {
 	if (typeof options != "object") options = {};
 	if (options.key == null) options.key = this.key;
 	if (options.region == null) options.region = this.region;
@@ -428,8 +435,8 @@ Legends.CHALLENGER_TYPES = [
  * Champions
  */
 
-Legends.prototype.champions =
-Legends.prototype.getChampions = function(freeToPlay, callback) {
+LegendsProto.champions =
+LegendsProto.getChampions = function(freeToPlay, callback) {
 	if (typeof freeToPlay == "function" && callback == null) {
 		callback = freeToPlay;
 		freeToPlay = false;
@@ -447,8 +454,8 @@ Legends.prototype.getChampions = function(freeToPlay, callback) {
  * Games
  */
 
-Legends.prototype.recentGames =
-Legends.prototype.getRecentGames = function(summonerId, callback) {
+LegendsProto.recentGames =
+LegendsProto.getRecentGames = function(summonerId, callback) {
 	return this.request({
 		method: "game/by-summoner/" + summonerId + "/recent",
 		version: "1.3",
@@ -460,8 +467,8 @@ Legends.prototype.getRecentGames = function(summonerId, callback) {
  * League
  */
 
-Legends.prototype.challengerLeagues =
-Legends.prototype.getChallengerLeagues = function(type, callback) {
+LegendsProto.challengerLeagues =
+LegendsProto.getChallengerLeagues = function(type, callback) {
 	if (typeof type === "function") {
 		callback = type;
 		type = 0;	
@@ -476,16 +483,16 @@ Legends.prototype.getChallengerLeagues = function(type, callback) {
 	}, callback);
 }
 
-Legends.prototype.leagueEntries =
-Legends.prototype.getLeagueEntries = function(summonerId, callback) {
+LegendsProto.leagueEntries =
+LegendsProto.getLeagueEntries = function(summonerId, callback) {
 	return this.request({
 		method: "league/by-summoner/" + summonerId + "/entry",
 		version: "2.3"
 	}, callback);
 }
 
-Legends.prototype.leagues =
-Legends.prototype.getLeagues = function(summonerId, callback) {
+LegendsProto.leagues =
+LegendsProto.getLeagues = function(summonerId, callback) {
 	return this.request({
 		method: "league/by-summoner/" + summonerId,
 		version: "2.3"
@@ -496,8 +503,8 @@ Legends.prototype.getLeagues = function(summonerId, callback) {
  * Stats
  */
 
-Legends.prototype.summaryStats =
-Legends.prototype.getSummaryStats = function(summonerId, season, callback) {
+LegendsProto.summaryStats =
+LegendsProto.getSummaryStats = function(summonerId, season, callback) {
 	if (typeof season == "function" && callback == null) {
 		callback = season;
 		season = null;
@@ -513,8 +520,8 @@ Legends.prototype.getSummaryStats = function(summonerId, season, callback) {
 	}, callback);
 }
 
-Legends.prototype.rankedStats =
-Legends.prototype.getRankedStats = function(summonerId, season, callback) {
+LegendsProto.rankedStats =
+LegendsProto.getRankedStats = function(summonerId, season, callback) {
 	if (typeof season == "function" && callback == null) {
 		callback = season;
 		season = null;
@@ -534,10 +541,10 @@ Legends.prototype.getRankedStats = function(summonerId, season, callback) {
  * Summoner
  */
 
-Legends.prototype.summonerById =
-Legends.prototype.summonersById =
-Legends.prototype.getSummonerById =
-Legends.prototype.getSummonersById = function() {
+LegendsProto.summonerById =
+LegendsProto.summonersById =
+LegendsProto.getSummonerById =
+LegendsProto.getSummonersById = function() {
 	var args = flattenArgs(arguments),
 		self = this;
 
@@ -549,10 +556,10 @@ Legends.prototype.getSummonersById = function() {
 	});
 }
 
-Legends.prototype.summonerByName =
-Legends.prototype.summonersByName =
-Legends.prototype.getSummonerByName =
-Legends.prototype.getSummonersByName = function() {
+LegendsProto.summonerByName =
+LegendsProto.summonersByName =
+LegendsProto.getSummonerByName =
+LegendsProto.getSummonersByName = function() {
 	var args = flattenArgs(arguments),
 		self = this;
 
@@ -564,8 +571,8 @@ Legends.prototype.getSummonersByName = function() {
 	});
 }
 
-Legends.prototype.runes =
-Legends.prototype.getRunes = function() {
+LegendsProto.runes =
+LegendsProto.getRunes = function() {
 	var args = flattenArgs(arguments),
 		self = this;
 
@@ -577,8 +584,8 @@ Legends.prototype.getRunes = function() {
 	});
 }
 
-Legends.prototype.masteries =
-Legends.prototype.getMasteries = function() {
+LegendsProto.masteries =
+LegendsProto.getMasteries = function() {
 	var args = flattenArgs(arguments),
 		self = this;
 
@@ -590,10 +597,10 @@ Legends.prototype.getMasteries = function() {
 	});
 }
 
-Legends.prototype.names =
-Legends.prototype.summonerNames =
-Legends.prototype.getNames =
-Legends.prototype.getSummonerNames = function() {
+LegendsProto.names =
+LegendsProto.summonerNames =
+LegendsProto.getNames =
+LegendsProto.getSummonerNames = function() {
 	var args = flattenArgs(arguments),
 		self = this;
 
@@ -609,8 +616,8 @@ Legends.prototype.getSummonerNames = function() {
  * Team
  */
 
-Legends.prototype.teams =
-Legends.prototype.getTeams = function(summonerId, callback) {
+LegendsProto.teams =
+LegendsProto.getTeams = function(summonerId, callback) {
 	return this.request({
 		method: "team/by-summoner/" + summonerId,
 		version: "2.2"

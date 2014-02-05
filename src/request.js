@@ -1,7 +1,10 @@
 function stringifyPrimitive(v) {
-	if (typeof v == "string") return v;
-	if (typeof v == "boolean") return v ? 'true' : 'false';
-	return '';
+	switch (typeof v) {
+		case "string": return v;
+		case "boolean": return v ? 'true' : 'false';
+		case "number": return v.toString(10);
+		default: return '';
+	}
 }
 
 function stringifyQuery(obj, sep, eq) {
@@ -31,7 +34,8 @@ var responseCodes = {
 	400: "Bad request",
 	401: "Unauthorized",
 	404: "Not found",
-	500: "Internal server error"
+	500: "Internal server error",
+	503: "Service Unavailable"
 };
 
 function HTTPError(err, res) {
