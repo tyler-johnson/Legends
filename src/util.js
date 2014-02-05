@@ -27,7 +27,7 @@ function multiPromiseResolver(promises) {
 		if (!c) return resolve(args);
 
 		promises.forEach(function(promise, i) {
-			promise = avow.lift(promise);
+			promise = Promise.lift(promise);
 			promise.then(
 				function(v) {
 					if (!(i in args)) {
@@ -39,4 +39,34 @@ function multiPromiseResolver(promises) {
 			);
 		});
 	});
+}
+
+function concatMany(args, max_per_request, forEach) {
+	var callback, promises = [], vals, promise;
+
+	// check for a callback
+	if (args.length > 0 && typeof args[args.length - 1] === "function") {
+		callback = args.pop();
+	}
+
+	while (args.length) {
+		vals = args.splice(0, max_per_request);
+		promises.push(forEach(vals));
+	}
+
+	promise = multiPromiseResolver(promises).then(function(data) {
+		return data.reduce(function(m, o) {
+			for (var key in o) {
+				if (Object.prototype.hasOwnProperty.call(o, key)) {
+					m[key] = o[key];
+				}
+			}
+
+			return m;
+		}, {});
+	});
+
+	if (callback) nodifyPromise(promise, callback);
+
+	return promise;
 }

@@ -118,6 +118,18 @@ var Promise = (function (func, obj) {
 		return (promise = {}).then = createFinalizedThen(promise, reason, 0), promise;
 	};
 
+	Promise.lift = function(val) {
+		return new Promise(function(resolve, reject) {
+			if (typeof val === "object" && Object.prototype.hasOwnProperty.call(val, "then")) {
+				val.then(resolve, reject);
+			} else if (val instanceof Error) {
+				reject(val);
+			} else {
+				resolve(val);
+			}
+		});
+	};
+
 	return Promise;
 })('f', 'o');
 
@@ -150,7 +162,7 @@ function multiPromiseResolver(promises) {
 		if (!c) return resolve(args);
 
 		promises.forEach(function(promise, i) {
-			promise = avow.lift(promise);
+			promise = Promise.lift(promise);
 			promise.then(
 				function(v) {
 					if (!(i in args)) {
@@ -162,6 +174,36 @@ function multiPromiseResolver(promises) {
 			);
 		});
 	});
+}
+
+function concatMany(args, max_per_request, forEach) {
+	var callback, promises = [], vals, promise;
+
+	// check for a callback
+	if (args.length > 0 && typeof args[args.length - 1] === "function") {
+		callback = args.pop();
+	}
+
+	while (args.length) {
+		vals = args.splice(0, max_per_request);
+		promises.push(forEach(vals));
+	}
+
+	promise = multiPromiseResolver(promises).then(function(data) {
+		return data.reduce(function(m, o) {
+			for (var key in o) {
+				if (Object.prototype.hasOwnProperty.call(o, key)) {
+					m[key] = o[key];
+				}
+			}
+
+			return m;
+		}, {});
+	});
+
+	if (callback) nodifyPromise(promise, callback);
+
+	return promise;
 }
 
 function stringifyPrimitive(v) {
@@ -374,12 +416,19 @@ Legends.MAP_NAMES = {
 	12: { name: "Howling Abyss", notes: "ARAM Map" }
 }
 
-Legends.REGIONS = [ "NA", "EUW", "EUNE", "BR", "TR" ];
+Legends.REGIONS = [ "NA", "EUW", "EUNE", "BR", "TR", "LAS" ];
+
+Legends.CHALLENGER_TYPES = [
+	"RANKED_SOLO_5X5",
+	"RANKED_TEAM_3X3",
+	"RANKED_TEAM_5X5"
+];
 
 /**
  * Champions
  */
 
+Legends.prototype.champions =
 Legends.prototype.getChampions = function(freeToPlay, callback) {
 	if (typeof freeToPlay == "function" && callback == null) {
 		callback = freeToPlay;
@@ -398,10 +447,11 @@ Legends.prototype.getChampions = function(freeToPlay, callback) {
  * Games
  */
 
+Legends.prototype.recentGames =
 Legends.prototype.getRecentGames = function(summonerId, callback) {
 	return this.request({
 		method: "game/by-summoner/" + summonerId + "/recent",
-		version: "1.2",
+		version: "1.3",
 		extract: "games"
 	}, callback);
 }
@@ -410,10 +460,35 @@ Legends.prototype.getRecentGames = function(summonerId, callback) {
  * League
  */
 
+Legends.prototype.challengerLeagues =
+Legends.prototype.getChallengerLeagues = function(type, callback) {
+	if (typeof type === "function") {
+		callback = type;
+		type = 0;	
+	}
+
+	if (typeof type === "number") type = Legends.CHALLENGER_TYPES[type];
+
+	return this.request({
+		method: "league/challenger",
+		version: "2.3",
+		params: { type: type }
+	}, callback);
+}
+
+Legends.prototype.leagueEntries =
+Legends.prototype.getLeagueEntries = function(summonerId, callback) {
+	return this.request({
+		method: "league/by-summoner/" + summonerId + "/entry",
+		version: "2.3"
+	}, callback);
+}
+
+Legends.prototype.leagues =
 Legends.prototype.getLeagues = function(summonerId, callback) {
 	return this.request({
 		method: "league/by-summoner/" + summonerId,
-		version: "2.2"
+		version: "2.3"
 	}, callback);
 }
 
@@ -421,6 +496,7 @@ Legends.prototype.getLeagues = function(summonerId, callback) {
  * Stats
  */
 
+Legends.prototype.summaryStats =
 Legends.prototype.getSummaryStats = function(summonerId, season, callback) {
 	if (typeof season == "function" && callback == null) {
 		callback = season;
@@ -437,6 +513,7 @@ Legends.prototype.getSummaryStats = function(summonerId, season, callback) {
 	}, callback);
 }
 
+Legends.prototype.rankedStats =
 Legends.prototype.getRankedStats = function(summonerId, season, callback) {
 	if (typeof season == "function" && callback == null) {
 		callback = season;
@@ -457,70 +534,82 @@ Legends.prototype.getRankedStats = function(summonerId, season, callback) {
  * Summoner
  */
 
-Legends.prototype.getSummonerById = function(summonerId, callback) {
-	return this.request({
-		method: "summoner/" + summonerId,
-		version: "1.2"
-	}, callback);
-}
+Legends.prototype.summonerById =
+Legends.prototype.summonersById =
+Legends.prototype.getSummonerById =
+Legends.prototype.getSummonersById = function() {
+	var args = flattenArgs(arguments),
+		self = this;
 
-Legends.prototype.getSummonerByName = function(name, callback) {
-	return this.request({
-		method: "summoner/by-name/" + name,
-		version: "1.2"
-	}, callback);
-}
-
-Legends.prototype.getRunes = function(summonerId, callback) {
-	return this.request({
-		method: "summoner/" + summonerId + "/runes",
-		version: "1.2",
-		extract: "pages"
-	}, callback);
-}
-
-Legends.prototype.getMasteries = function(summonerId, callback) {
-	return this.request({
-		method: "summoner/" + summonerId + "/masteries",
-		version: "1.2",
-		extract: "pages"
-	}, callback);
-}
-
-Legends.prototype.getNames = function() {
-	var args = flattenArgs(arguments), callback;
-
-	// check for a callback
-	if (args.length > 0 && typeof args[args.length - 1] == "function") {
-		callback = args.pop();
-	}
-
-	var MAX_PER_REQUEST = 40,
-		promises = [], ids;
-
-	while (args.length) {
-		ids = args.splice(0, MAX_PER_REQUEST).join(",");
-		
-		promises.push(this.request({
-			method: "summoner/" + ids + "/name",
-			version: "1.2",
-			extract: "summoners"
-		}));
-	}
-
-	var promise = multiPromiseResolver(promises).then(function(data) {
-		return data.reduce(function(m, a) { return m.concat(a); }, []);
+	return concatMany(args, 40, function(ids) {
+		return self.request({
+			method: "summoner/" + ids.join(","),
+			version: "1.3"
+		});
 	});
+}
 
-	if (callback) nodifyPromise(promise, callback);
+Legends.prototype.summonerByName =
+Legends.prototype.summonersByName =
+Legends.prototype.getSummonerByName =
+Legends.prototype.getSummonersByName = function() {
+	var args = flattenArgs(arguments),
+		self = this;
 
-	return promise;
+	return concatMany(args, 40, function(names) {
+		return self.request({
+			method: "summoner/by-name/" + names.join(","),
+			version: "1.3"
+		});
+	});
+}
+
+Legends.prototype.runes =
+Legends.prototype.getRunes = function() {
+	var args = flattenArgs(arguments),
+		self = this;
+
+	return concatMany(args, 40, function(ids) {
+		return self.request({
+			method: "summoner/" + ids.join(",") + "/runes",
+			version: "1.3"
+		});
+	});
+}
+
+Legends.prototype.masteries =
+Legends.prototype.getMasteries = function() {
+	var args = flattenArgs(arguments),
+		self = this;
+
+	return concatMany(args, 40, function(ids) {
+		return self.request({
+			method: "summoner/" + ids.join(",") + "/masteries",
+			version: "1.3"
+		});
+	});
+}
+
+Legends.prototype.names =
+Legends.prototype.summonerNames =
+Legends.prototype.getNames =
+Legends.prototype.getSummonerNames = function() {
+	var args = flattenArgs(arguments),
+		self = this;
+
+	return concatMany(args, 40, function(ids) {
+		return self.request({
+			method: "summoner/" + ids.join(",") + "/name",
+			version: "1.3"
+		});
+	});
 }
 
 /**
  * Team
  */
 
+Legends.prototype.teams =
 Legends.prototype.getTeams = function(summonerId, callback) {
 	return this.request({
 		method: "team/by-summoner/" + summonerId,

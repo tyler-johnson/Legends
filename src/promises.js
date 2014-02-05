@@ -110,5 +110,17 @@ var Promise = (function (func, obj) {
 		return (promise = {}).then = createFinalizedThen(promise, reason, 0), promise;
 	};
 
+	Promise.lift = function(val) {
+		return new Promise(function(resolve, reject) {
+			if (typeof val === "object" && Object.prototype.hasOwnProperty.call(val, "then")) {
+				val.then(resolve, reject);
+			} else if (val instanceof Error) {
+				reject(val);
+			} else {
+				resolve(val);
+			}
+		});
+	};
+
 	return Promise;
 })('f', 'o');
