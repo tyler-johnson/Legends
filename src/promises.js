@@ -112,7 +112,7 @@ var Promise = (function (func, obj) {
 
 	Promise.lift = function(val) {
 		return new Promise(function(resolve, reject) {
-			if (typeof val === "object" && typeof val.then === "function")) {
+			if (typeof val === "object" && typeof val.then === "function") {
 				val.then(resolve, reject);
 			} else if (val instanceof Error) {
 				reject(val);

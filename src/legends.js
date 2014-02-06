@@ -7,6 +7,8 @@ function Legends(key, region) {
 
 	this.key = key;
 	this.region = region;
+
+	this["static"] = new Legends.Static(key, region);
 }
 
 // Pointer for a smaller minified source
@@ -297,14 +299,4 @@ LegendsProto.getTeams = function(summonerId, callback) {
 		method: "team/by-summoner/" + summonerId,
 		version: "2.2"
 	}, callback);
-}
-
-/**
- * Public API Factory
- */
-
-if (typeof module === "object" && module.exports != null) {
-	module.exports = Legends;
-} else if (typeof window != "undefined") {
-	window.Legends = Legends;
 }

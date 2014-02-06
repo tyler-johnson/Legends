@@ -120,7 +120,7 @@ var Promise = (function (func, obj) {
 
 	Promise.lift = function(val) {
 		return new Promise(function(resolve, reject) {
-			if (typeof val === "object" && Object.prototype.hasOwnProperty.call(val, "then")) {
+			if (typeof val === "object" && typeof val.then === "function") {
 				val.then(resolve, reject);
 			} else if (val instanceof Error) {
 				reject(val);
@@ -220,7 +220,7 @@ function stringifyQuery(obj, sep, eq) {
 	if (sep == null) sep = '&';
 	if (eq == null) eq = '=';
 
-	if (typeof obj == "object") {
+	if (typeof obj === "object") {
 		return Object.keys(obj).map(function(k) {
 			var ks = encodeURIComponent(stringifyPrimitive(k)) + eq,
 				val = obj[k];
@@ -320,7 +320,7 @@ function XHRRequest(url) {
 }
 
 function HTTPRequest(url) {
-	return typeof require == "function" ? nodeRequest(url) : XHRRequest(url);
+	return typeof require === "function" ? nodeRequest(url) : XHRRequest(url);
 }
 
 /**
@@ -332,6 +332,8 @@ function Legends(key, region) {
 
 	this.key = key;
 	this.region = region;
+
+	this["static"] = new Legends.Static(key, region);
 }
 
 // Pointer for a smaller minified source
@@ -342,7 +344,7 @@ var LegendsProto = Legends.prototype;
  */
 
 Legends.request = function(options, callback) {
-	if (typeof options != "object") options = {};
+	if (typeof options !== "object") options = {};
 
 	var method = options.method != null ? options.method : "",
 		region = options.region != null ? options.region : "na",
@@ -377,7 +379,7 @@ Legends.request = function(options, callback) {
 	if (extract != null) promise = promise.then(function(data) { return data[extract]; });
 
 	// load the callback
-	if (typeof callback == "function") nodifyPromise(promise, callback);
+	if (typeof callback === "function") nodifyPromise(promise, callback);
 
 	return promise;
 }
@@ -437,7 +439,7 @@ Legends.CHALLENGER_TYPES = [
 
 LegendsProto.champions =
 LegendsProto.getChampions = function(freeToPlay, callback) {
-	if (typeof freeToPlay == "function" && callback == null) {
+	if (typeof freeToPlay === "function" && callback == null) {
 		callback = freeToPlay;
 		freeToPlay = false;
 	}
@@ -505,7 +507,7 @@ LegendsProto.getLeagues = function(summonerId, callback) {
 
 LegendsProto.summaryStats =
 LegendsProto.getSummaryStats = function(summonerId, season, callback) {
-	if (typeof season == "function" && callback == null) {
+	if (typeof season === "function" && callback == null) {
 		callback = season;
 		season = null;
 	}
@@ -522,7 +524,7 @@ LegendsProto.getSummaryStats = function(summonerId, season, callback) {
 
 LegendsProto.rankedStats =
 LegendsProto.getRankedStats = function(summonerId, season, callback) {
-	if (typeof season == "function" && callback == null) {
+	if (typeof season === "function" && callback == null) {
 		callback = season;
 		season = null;
 	}
@@ -625,10 +627,93 @@ LegendsProto.getTeams = function(summonerId, callback) {
 }
 
 /**
- * Public API Factory
+ * Static Data Constructor
  */
 
-if (typeof module == "object" && module.exports != null) {
+Legends.Static = function(key, region) {
+	if (!(this instanceof Legends.Static)) return new Legends.Static(key, region);
+
+	this.key = key;
+	this.region = region;
+}
+
+// Pointer for a smaller minified source
+var LegendsStaticProto = Legends.Static.prototype; 
+
+/**
+ * Static Request
+ */
+
+Legends.Static.request = function(options, callback) {
+	if (options == null) options = {};
+	if (options.region == null) options.region = "na";
+	if (options.version == null) options.version = "1";
+
+	options.region = "static-data/" + options.region;
+	if (options.id != null) options.method += "/" + options.id;
+
+	return Legends.request(options, callback);
+}
+
+LegendsStaticProto.request = function(options, callback) {
+	if (typeof options != "object") options = {};
+	if (options.key == null) options.key = this.key;
+	if (options.region == null) options.region = this.region;
+
+	return Legends.Static.request(options, callback);
+}
+
+/**
+ * Constants
+ */
+
+Legends.Static.REGIONS = [ "NA", "EUW", "EUNE", "BR", "TR", "LAS", "KR", "LAN", "OCE", "RU" ];
+
+/**
+ * Standard Static Endpoints
+ */
+
+var staticEndpoints = [ "champion", "item", "mastery", "rune", "summoner-spell" ];
+
+staticEndpoints.forEach(function(endpoint) {
+	var method = endpoint.replace(/-([a-z0-9])/gi, function(m, $1) {
+		return $1.toUpperCase();
+	});
+
+	var methodPlural = method.substr(-1) === "y" ? method.substr(0, method.length - 1) + "ies" : method + "s",
+		methodUpper = method[0].toUpperCase() + method.substr(1),
+		methodPluralUpper = methodPlural[0].toUpperCase() + methodPlural.substr(1);
+
+	LegendsStaticProto[method] =
+	LegendsStaticProto[methodPlural] =
+	LegendsStaticProto["get" + methodUpper] =
+	LegendsStaticProto["get" + methodPluralUpper] = function(id, callback) {
+		if (typeof id === "function" && callback == null) {
+			callback = id;
+			id = null;
+		}
+
+		return this.request({
+			method: endpoint,
+			id: id,
+			extract: id != null ? null : "data"
+		}, callback);
+	}
+});
+
+/**
+ * Realm
+ */
+
+LegendsStaticProto.realm =
+LegendsStaticProto.getRealm = function(callback) {
+	return this.request({
+		method: "realm"
+	}, callback);
+}
+
+// API Factory
+if (typeof module === "object" && module.exports != null) {
 	module.exports = Legends;
 } else if (typeof window != "undefined") {
 	window.Legends = Legends;
