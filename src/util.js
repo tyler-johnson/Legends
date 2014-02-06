@@ -70,3 +70,7 @@ function concatMany(args, max_per_request, forEach) {
 
 	return promise;
 }
+
+function titleize(str) {
+	return str[0].toUpperCase() + str.substr(1);
+}

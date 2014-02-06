@@ -206,6 +206,10 @@ function concatMany(args, max_per_request, forEach) {
 	return promise;
 }
 
+function titleize(str) {
+	return str[0].toUpperCase() + str.substr(1);
+}
+
 function stringifyPrimitive(v) {
 	switch (typeof v) {
 		case "string": return v;
@@ -673,21 +677,21 @@ Legends.Static.REGIONS = [ "NA", "EUW", "EUNE", "BR", "TR", "LAS", "KR", "LAN", 
  * Standard Static Endpoints
  */
 
-var staticEndpoints = [ "champion", "item", "mastery", "rune", "summoner-spell" ];
+var staticEndpoints = {
+	"champion": [ "champion", "champions" ],
+	"item": [ "item", "items" ],
+	"mastery": [ "mastery", "masteries" ],
+	"rune": [ "rune", "runes" ],
+	"summoner-spell": [ "summonerSpell", "summonerSpells" ]
+}
 
-staticEndpoints.forEach(function(endpoint) {
-	var method = endpoint.replace(/-([a-z0-9])/gi, function(m, $1) {
-		return $1.toUpperCase();
-	});
+for (var endpoint in staticEndpoints) {
+	var method = staticEndpoints[endpoint];
 
-	var methodPlural = method.substr(-1) === "y" ? method.substr(0, method.length - 1) + "ies" : method + "s",
-		methodUpper = method[0].toUpperCase() + method.substr(1),
-		methodPluralUpper = methodPlural[0].toUpperCase() + methodPlural.substr(1);
-
-	LegendsStaticProto[method] =
-	LegendsStaticProto[methodPlural] =
-	LegendsStaticProto["get" + methodUpper] =
-	LegendsStaticProto["get" + methodPluralUpper] = function(id, callback) {
+	LegendsStaticProto[method[0]] =
+	LegendsStaticProto[method[1]] =
+	LegendsStaticProto["get" + titleize(method[0])] =
+	LegendsStaticProto["get" + titleize(method[1])] = function(id, callback) {
 		if (typeof id === "function" && callback == null) {
 			callback = id;
 			id = null;
@@ -699,7 +703,7 @@ staticEndpoints.forEach(function(endpoint) {
 			extract: id != null ? null : "data"
 		}, callback);
 	}
-});
+}
 
 /**
  * Realm
