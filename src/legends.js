@@ -222,71 +222,56 @@ LegendsProto.summonerById =
 LegendsProto.summonersById =
 LegendsProto.getSummonerById =
 LegendsProto.getSummonersById = function() {
-	var args = flattenArgs(arguments),
-		self = this;
-
-	return concatMany(args, 40, function(ids) {
+	return concatMany(args, 40, (function(ids) {
 		return self.request({
 			method: "summoner/" + ids.join(","),
 			version: "1.3"
 		});
-	});
+	}).bind(this));
 }
 
 LegendsProto.summonerByName =
 LegendsProto.summonersByName =
 LegendsProto.getSummonerByName =
 LegendsProto.getSummonersByName = function() {
-	var args = flattenArgs(arguments),
-		self = this;
-
-	return concatMany(args, 40, function(names) {
+	return concatMany(args, 40, (function(names) {
 		return self.request({
 			method: "summoner/by-name/" + names.join(","),
 			version: "1.3"
 		});
-	});
+	}).bind(this));
 }
 
 LegendsProto.runes =
 LegendsProto.getRunes = function() {
-	var args = flattenArgs(arguments),
-		self = this;
-
-	return concatMany(args, 40, function(ids) {
+	return concatMany(args, 40, (function(ids) {
 		return self.request({
 			method: "summoner/" + ids.join(",") + "/runes",
 			version: "1.3"
 		});
-	});
+	}).bind(this));
 }
 
 LegendsProto.masteries =
 LegendsProto.getMasteries = function() {
-	var args = flattenArgs(arguments),
-		self = this;
-
-	return concatMany(args, 40, function(ids) {
+	return concatMany(args, 40, (function(ids) {
 		return self.request({
 			method: "summoner/" + ids.join(",") + "/masteries",
 			version: "1.3"
 		});
-	});
+	}).bind(this));
 }
 
 LegendsProto.names =
 LegendsProto.summonerNames =
 LegendsProto.getNames =
 LegendsProto.getSummonerNames = function() {
-	var args = flattenArgs(arguments),
-		self = this;
-
-	return concatMany(args, 40, function(ids) {
+	return concatMany(arguments, 40, (function(ids) {
 		return self.request({
 			method: "summoner/" + ids.join(",") + "/name",
 			version: "1.3"
 		});
-	});
+	}).bind(this));
 }
 
 /**

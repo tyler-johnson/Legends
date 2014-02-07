@@ -43,6 +43,7 @@ function multiPromiseResolver(promises) {
 
 function concatMany(args, max_per_request, forEach) {
 	var callback, promises = [], vals, promise;
+	args = flattenArgs(args);
 
 	// check for a callback
 	if (args.length > 0 && typeof args[args.length - 1] === "function") {
